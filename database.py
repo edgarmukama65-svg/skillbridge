@@ -1,4 +1,4 @@
-# database.py - SQLite Version (Complete)
+# database.py - SQLite Version for Streamlit Cloud
 
 import sqlite3
 import json
@@ -6,16 +6,14 @@ from datetime import datetime
 import uuid
 import hashlib
 import os
+import streamlit as st
 
 # ============================================
 # DATABASE SETUP - SQLite
 # ============================================
 
-# Get the folder where this file is located
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "skillbridge.db")
-
-print(f"📁 Database path: {DB_PATH}")
 
 def get_connection():
     """Connect to SQLite database"""
@@ -26,6 +24,10 @@ def get_connection():
     except Exception as e:
         print(f"❌ Database error: {e}")
         return None
+
+# ============================================
+# AUTO-CREATE TABLES WHEN APP STARTS
+# ============================================
 
 def create_tables():
     """Create all tables if they don't exist"""
@@ -50,7 +52,6 @@ def create_tables():
             IsActive INTEGER DEFAULT 1
         )
     ''')
-    print("✅ Users table created")
     
     # Analyses table
     cursor.execute('''
@@ -67,11 +68,50 @@ def create_tables():
             FOREIGN KEY (UserId) REFERENCES Users(Id) ON DELETE CASCADE
         )
     ''')
-    print("✅ Analyses table created")
     
     conn.commit()
     conn.close()
     print("✅ Database created successfully!")
+
+# Create tables immediately when app starts
+create_tables()
+
+# ============================================
+# CREATE DEFAULT ADMIN USER
+# ============================================
+
+def create_admin_user():
+    """Create default admin user if not exists"""
+    conn = get_connection()
+    if conn is None:
+        return
+    
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM Users WHERE Role = 'Admin'")
+    count = cursor.fetchone()[0]
+    
+    if count == 0:
+        print("👤 Creating default admin user...")
+        user_id = str(uuid.uuid4())[:8]
+        now = datetime.now().isoformat()
+        password_hash = hashlib.sha256("admin123".encode()).hexdigest()
+        
+        cursor.execute("""
+            INSERT INTO Users (Id, Email, Name, PasswordHash, Role, CreatedAt, IsActive)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (user_id, "admin@skillbridge.com", "Admin User", password_hash, "Admin", now, 1))
+        
+        conn.commit()
+        print("✅ Default admin created: admin@skillbridge.com / admin123")
+    
+    conn.close()
+
+# Create admin user immediately
+create_admin_user()
+
+# ============================================
+# PASSWORD HASHING
+# ============================================
 
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
@@ -89,7 +129,6 @@ def register_user(name, email, password):
         
         cursor = conn.cursor()
         
-        # Check if user exists
         cursor.execute("SELECT Email FROM Users WHERE Email = ?", (email,))
         if cursor.fetchone():
             conn.close()
@@ -118,8 +157,6 @@ def register_user(name, email, password):
 def login_user(email, password):
     """Login a user"""
     try:
-        print(f"🔄 Login attempt: {email}")
-        
         conn = get_connection()
         if conn is None:
             return None, "Database connection failed"
@@ -194,8 +231,6 @@ def get_all_users():
         cursor.execute("SELECT Id, Name, Email, Role, CreatedAt, IsActive FROM Users ORDER BY CreatedAt DESC")
         results = cursor.fetchall()
         conn.close()
-        
-        # Convert to list of tuples
         return [tuple(row) for row in results]
         
     except Exception as e:
@@ -410,46 +445,3 @@ def get_system_stats_admin():
     except Exception as e:
         print(f"❌ Error: {e}")
         return {}
-
-# ============================================
-# DATABASE SETUP
-# ============================================
-
-def setup_database():
-    """Complete database setup"""
-    print("🔄 Setting up SkillBridge SQLite database...")
-    print(f"📁 Database path: {DB_PATH}")
-    create_tables()
-    
-    # Check if admin user exists
-    conn = get_connection()
-    if conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM Users WHERE Role = 'Admin'")
-        count = cursor.fetchone()[0]
-        conn.close()
-        
-        if count == 0:
-            print("👤 Creating default admin user...")
-            admin_id, msg = register_user("Admin User", "admin@skillbridge.com", "admin123")
-            if admin_id:
-                conn = get_connection()
-                cursor = conn.cursor()
-                cursor.execute("UPDATE Users SET Role = 'Admin' WHERE Id = ?", (admin_id,))
-                conn.commit()
-                conn.close()
-                print("✅ Default admin created: admin@skillbridge.com / admin123")
-    
-    # Show all users
-    users = get_all_users()
-    if users:
-        print("\n📋 Users in database:")
-        for user in users:
-            print(f"  👤 {user[1]} ({user[2]}) - Role: {user[3]}")
-    else:
-        print("\n📋 No users in database yet.")
-    
-    print("✅ Database setup complete!")
-
-if __name__ == "__main__":
-    setup_database()
