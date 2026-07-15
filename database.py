@@ -6,7 +6,6 @@ from datetime import datetime
 import uuid
 import hashlib
 import os
-import streamlit as st
 
 # ============================================
 # DATABASE SETUP - SQLite
@@ -14,6 +13,8 @@ import streamlit as st
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "skillbridge.db")
+
+print(f"📁 Database path: {DB_PATH}")
 
 def get_connection():
     """Connect to SQLite database"""
@@ -26,7 +27,7 @@ def get_connection():
         return None
 
 # ============================================
-# AUTO-CREATE TABLES WHEN APP STARTS
+# CREATE TABLES
 # ============================================
 
 def create_tables():
@@ -52,6 +53,7 @@ def create_tables():
             IsActive INTEGER DEFAULT 1
         )
     ''')
+    print("✅ Users table created")
     
     # Analyses table
     cursor.execute('''
@@ -68,13 +70,11 @@ def create_tables():
             FOREIGN KEY (UserId) REFERENCES Users(Id) ON DELETE CASCADE
         )
     ''')
+    print("✅ Analyses table created")
     
     conn.commit()
     conn.close()
     print("✅ Database created successfully!")
-
-# Create tables immediately when app starts
-create_tables()
 
 # ============================================
 # CREATE DEFAULT ADMIN USER
@@ -87,6 +87,8 @@ def create_admin_user():
         return
     
     cursor = conn.cursor()
+    
+    # Check if admin exists
     cursor.execute("SELECT COUNT(*) FROM Users WHERE Role = 'Admin'")
     count = cursor.fetchone()[0]
     
@@ -103,10 +105,19 @@ def create_admin_user():
         
         conn.commit()
         print("✅ Default admin created: admin@skillbridge.com / admin123")
+    else:
+        print("👤 Admin user already exists")
     
     conn.close()
 
-# Create admin user immediately
+# ============================================
+# RUN SETUP ON STARTUP
+# ============================================
+
+# Create tables when app starts
+create_tables()
+
+# Create admin user when app starts
 create_admin_user()
 
 # ============================================
@@ -157,6 +168,8 @@ def register_user(name, email, password):
 def login_user(email, password):
     """Login a user"""
     try:
+        print(f"🔄 Login attempt: {email}")
+        
         conn = get_connection()
         if conn is None:
             return None, "Database connection failed"
