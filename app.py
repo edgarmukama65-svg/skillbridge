@@ -1,15 +1,24 @@
 # app.py - SkillBridge Complete Application
-# All Features: Authentication, Admin Panel, Analytics, Resume Builder, 
-# Cover Letter Generator, Pricing, Password Reset, Mobile Responsive
+# All Features: Authentication, Admin Panel, Analytics, Resume Builder,
+# Cover Letter Generator, Pricing, Password Reset, Mobile Responsive,
+# Payment, PDF Export, Advanced Algorithm, Job Recommendations (with Upload),
+# Salary Estimator (with Upload), Interview Questions
 
 import streamlit as st
 import PyPDF2
 import random
 import pandas as pd
+import json
 from database import (
-    register_user, login_user, save_analysis, get_user_analyses, 
+    register_user, login_user, save_analysis, get_user_analyses,
     get_user_statistics, is_admin, get_user_by_id
 )
+from algorithms import analyze_skills_advanced
+from datetime import datetime
+from report_generator import generate_analysis_report
+from job_recommendations import recommend_jobs
+from salary_estimator import estimate_salary
+from interview_questions import generate_questions
 import urllib.parse
 
 # ============================================
@@ -103,32 +112,14 @@ st.markdown("""
         box-shadow: 0 4px 15px rgba(0,0,0,0.05);
     }
     
-    /* ============================================
-       MOBILE RESPONSIVE - ENHANCED
-    ============================================ */
+    /* Mobile Responsive */
     @media (max-width: 768px) {
-        /* Make sidebar full width on mobile */
-        .css-1d391kg {
-            width: 100% !important;
-            min-width: 100% !important;
-        }
-        
-        /* Make content take full width */
-        .main .block-container {
-            padding: 10px !important;
-        }
-        
-        /* Stack columns on mobile */
         .row-widget.stColumns {
             flex-direction: column !important;
         }
-        
-        /* Make buttons full width */
         .stButton button {
             width: 100% !important;
         }
-        
-        /* Smaller fonts on mobile */
         h1 {
             font-size: 28px !important;
         }
@@ -138,34 +129,9 @@ st.markdown("""
         h3 {
             font-size: 18px !important;
         }
-        
-        /* Make metrics stack */
         .stMetric {
-            width: 100% !important;
-            margin: 5px 0 !important;
-        }
-        
-        /* Make expanders full width */
-        .streamlit-expanderHeader {
-            font-size: 14px !important;
-        }
-        
-        /* Better spacing for mobile */
-        .stAlert {
             padding: 10px !important;
-            font-size: 14px !important;
-        }
-        
-        /* Make tabs easier to tap */
-        .stTabs [data-baseweb="tab"] {
-            padding: 8px 12px !important;
-            font-size: 14px !important;
-        }
-        
-        /* Make inputs bigger on mobile */
-        .stTextInput input, .stTextArea textarea {
-            font-size: 16px !important;
-            padding: 12px !important;
+            margin: 5px 0 !important;
         }
     }
 </style>
@@ -285,14 +251,14 @@ with st.sidebar:
     st.divider()
     
     # ============================================
-    # NAVIGATION
+    # NAVIGATION - UPDATED WITH ALL FEATURES
     # ============================================
     st.header("📱 Navigation")
     
     if st.session_state.user_id and is_admin(st.session_state.user_id):
-        nav_options = ["🏠 Home", "👑 Admin Panel", "📊 Analytics", "📄 Resume Builder", "📝 Cover Letter", "💰 Pricing"]
+        nav_options = ["🏠 Home", "👑 Admin Panel", "📊 Analytics", "📄 Resume Builder", "📝 Cover Letter", "💰 Pricing", "💳 Payment", "💼 Jobs", "💰 Salary Estimator", "🎤 Interview Questions"]
     else:
-        nav_options = ["🏠 Home", "📄 Resume Builder", "📝 Cover Letter", "💰 Pricing"]
+        nav_options = ["🏠 Home", "📄 Resume Builder", "📝 Cover Letter", "💰 Pricing", "💳 Payment", "💼 Jobs", "💰 Salary Estimator", "🎤 Interview Questions"]
     
     selected_nav = st.radio("Go to", nav_options, index=0)
 
@@ -305,7 +271,7 @@ if st.session_state.get("show_reset", False):
     st.stop()
 
 # ============================================
-# FUNCTIONS
+# PDF EXTRACTION
 # ============================================
 
 def extract_text(pdf_file):
@@ -317,37 +283,6 @@ def extract_text(pdf_file):
         return text.strip(), None
     except Exception as e:
         return None, str(e)
-
-def analyze_skills(resume_text, job_desc):
-    skills = [
-        "Python", "Java", "SQL", "JavaScript", "React", "Docker", 
-        "AWS", "Git", "Kubernetes", "Go", "Rust", "C++", "TypeScript",
-        "Node.js", "Django", "Flask", "Spring Boot", "Angular", "Vue.js"
-    ]
-    
-    text = (resume_text + " " + job_desc).lower()
-    found = [s for s in skills if s.lower() in text]
-    
-    if not found:
-        found = random.sample(skills, 5)
-    
-    return {
-        "job_title": "Software Engineer",
-        "ats_score": random.randint(55, 88),
-        "skills_have": found[:3],
-        "skills_need": found[3:6] if len(found) > 3 else ["Docker", "AWS", "Kubernetes"],
-        "skills_missing": ["Docker", "AWS"] if "Docker" not in found else random.sample(skills, 2),
-        "learning_roadmap": [
-            "Learn Docker using online courses (4 weeks)",
-            "Get AWS Certified (6 weeks)",
-            "Build a Kubernetes project (3 weeks)"
-        ],
-        "resume_tips": [
-            "Add Docker to your skills section",
-            "Quantify your achievements",
-            "Tailor your summary to the job"
-        ]
-    }
 
 # ============================================
 # HOME PAGE
@@ -387,13 +322,17 @@ if selected_nav == "🏠 Home":
             elif not job_desc:
                 st.error("❌ Please paste a job description")
             else:
-                with st.spinner("Analyzing your resume..."):
+                with st.spinner("Analyzing your resume with advanced AI..."):
                     text, err = extract_text(uploaded_file)
                     if err:
                         st.error(f"❌ PDF error: {err}")
                     else:
                         st.success("✅ PDF text extracted successfully!")
-                        result = analyze_skills(text, job_desc)
+                        
+                        # ============================================
+                        # USING ADVANCED ALGORITHM
+                        # ============================================
+                        result = analyze_skills_advanced(text, job_desc)
                         
                         if st.session_state.user_id:
                             analysis_id = save_analysis(st.session_state.user_id, result, text, job_desc)
@@ -404,6 +343,10 @@ if selected_nav == "🏠 Home":
                         
                         # Display Results
                         score = result.get("ats_score", 0)
+                        job_title = result.get("job_title", "Software Engineer")
+                        
+                        st.markdown(f"### 🎯 Job Title Detected: **{job_title}**")
+                        
                         st.markdown("### 📊 ATS Compatibility Score")
                         col1, col2, col3 = st.columns([2, 1, 1])
                         with col1:
@@ -419,27 +362,75 @@ if selected_nav == "🏠 Home":
                             status = "✅ Strong" if score >= 70 else "⚠️ Moderate" if score >= 50 else "❌ Needs Work"
                             st.metric("Status", status)
                         
+                        # Skill Categories
+                        categories = result.get("skill_categories", {})
+                        if categories:
+                            st.markdown("### 📂 Skill Category Breakdown")
+                            for category, data in categories.items():
+                                found_count = data.get("found", 0)
+                                needed_count = data.get("needed", 0)
+                                col1, col2, col3 = st.columns([2, 1, 1])
+                                with col1:
+                                    st.markdown(f"**{category.title()}**")
+                                with col2:
+                                    st.markdown(f"✅ Found: {found_count}")
+                                with col3:
+                                    st.markdown(f"📌 Needed: {needed_count}")
+                        
+                        # Skills
                         col1, col2 = st.columns(2)
                         with col1:
                             st.markdown("#### ✅ Skills You Have")
                             for skill in result.get("skills_have", []):
-                                st.success(f"✅ {skill}")
+                                st.success(f"✅ {skill.title()}")
                         with col2:
                             st.markdown("#### 📌 Skills You Need")
                             for skill in result.get("skills_need", []):
-                                st.warning(f"📌 {skill}")
+                                st.warning(f"📌 {skill.title()}")
                         
+                        # Missing Skills
                         st.markdown("#### 🚨 Missing Skills")
-                        for skill in result.get("skills_missing", []):
-                            st.error(f"🔴 {skill} - Add this to your resume!")
+                        missing = result.get("skills_missing", [])
+                        if missing:
+                            for skill in missing:
+                                st.error(f"🔴 **{skill.title()}** - Add this to your resume!")
+                        else:
+                            st.success("🎉 No missing skills found!")
                         
+                        # Learning Roadmap
                         st.markdown("#### 📚 Personalized Learning Roadmap")
                         for i, step in enumerate(result.get("learning_roadmap", []), 1):
                             st.info(f"**Step {i}:** {step}")
                         
+                        # Resume Tips
                         st.markdown("#### 💡 Resume Optimization Tips")
                         for i, tip in enumerate(result.get("resume_tips", []), 1):
                             st.info(f"**Tip {i}:** {tip}")
+                        
+                        # ============================================
+                        # EXPORT PDF REPORT
+                        # ============================================
+                        st.divider()
+                        st.subheader("📄 Export Report")
+                        
+                        if st.session_state.user_id:
+                            user = get_user_by_id(st.session_state.user_id)
+                            user_name = user[1] if user else "User"
+                            
+                            if st.button("📄 Generate PDF Report", use_container_width=True):
+                                with st.spinner("Generating your professional PDF report..."):
+                                    pdf_data = generate_analysis_report(
+                                        result, text, job_desc, user_name
+                                    )
+                                    st.download_button(
+                                        label="📥 Download PDF Report",
+                                        data=pdf_data,
+                                        file_name=f"SkillBridge_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+                                        mime="application/pdf",
+                                        use_container_width=True
+                                    )
+                        else:
+                            st.info("🔓 Login to download your report")
     
     st.divider()
     st.markdown("### 📋 Your History")
@@ -661,6 +652,434 @@ elif selected_nav == "💰 Pricing":
         ✅ Dedicated Support
         ✅ Custom Solutions
         """)
+
+# ============================================
+# PAYMENT PAGE
+# ============================================
+elif selected_nav == "💳 Payment":
+    from payment import show_payment_page, handle_payment_callback
+    handle_payment_callback()
+    show_payment_page()
+
+# ============================================
+# JOB RECOMMENDATIONS - WITH UPLOAD
+# ============================================
+elif selected_nav == "💼 Jobs":
+    st.title("💼 Job Recommendations")
+    st.subheader("Find jobs that match your skills")
+    
+    if st.session_state.user_id:
+        # Check if user has existing skills
+        history = get_user_analyses(st.session_state.user_id)
+        all_skills = []
+        
+        for h in history[:10]:
+            try:
+                if len(h) > 7 and h[7]:
+                    skills_have = json.loads(h[7])
+                    if isinstance(skills_have, list):
+                        all_skills.extend(skills_have)
+            except:
+                pass
+        
+        user_skills = list(set(all_skills))
+        
+        if user_skills:
+            st.info(f"📋 Your Skills: {', '.join(user_skills[:10])}")
+            
+            if len(user_skills) > 10:
+                st.caption(f"... and {len(user_skills) - 10} more skills")
+            
+            # Show existing recommendations
+            with st.spinner("Finding jobs that match your skills..."):
+                recommendations = recommend_jobs(user_skills, limit=5)
+            
+            if recommendations:
+                st.success(f"✅ Found {len(recommendations)} job matches!")
+                
+                for i, job in enumerate(recommendations, 1):
+                    with st.expander(f"{i}. {job['title']} at {job['company']} - {job['match_score']}% Match", expanded=(i==1)):
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.markdown(f"**📍 Location:** {job['location']}")
+                            st.markdown(f"**💰 Salary:** {job['salary']}")
+                            st.markdown(f"**🎯 Match Score:** {job['match_score']}%")
+                        with col2:
+                            st.markdown(f"**📊 Experience:** {job['experience_level']}")
+                            st.markdown(f"**✅ Matched Skills:** {', '.join(job['matched_skills'])}")
+                            if job['missing_skills']:
+                                st.warning(f"**❌ Missing Skills:** {', '.join(job['missing_skills'])}")
+                        
+                        st.markdown(f"**📝 Description:** {job['description']}")
+                        
+                        if st.button(f"📧 Apply Now", key=f"apply_{i}"):
+                            st.success(f"✅ Application started for {job['title']} at {job['company']}!")
+            else:
+                st.info("No job matches found. Upload a new resume to improve your profile.")
+                
+                # Upload section
+                st.divider()
+                st.subheader("📄 Upload a Resume to Find Jobs")
+                
+                col1, col2 = st.columns([1, 2])
+                with col1:
+                    uploaded_file = st.file_uploader("Choose a PDF file", type="pdf", key="job_upload")
+                with col2:
+                    job_title_input = st.text_input("Job Title (Optional)", placeholder="e.g., Software Engineer")
+                
+                if st.button("🔍 Analyze Resume for Job Matches", use_container_width=True):
+                    if uploaded_file:
+                        with st.spinner("Analyzing your resume..."):
+                            text, err = extract_text(uploaded_file)
+                            if err:
+                                st.error(f"❌ PDF error: {err}")
+                            else:
+                                st.success("✅ Resume analyzed successfully!")
+                                
+                                # Extract skills
+                                result = analyze_skills_advanced(text, job_title_input or "Software Engineer")
+                                skills_from_resume = result.get("skills_have", [])
+                                
+                                if skills_from_resume:
+                                    st.info(f"📋 Skills Found: {', '.join(skills_from_resume)}")
+                                    
+                                    if st.session_state.user_id:
+                                        analysis_id = save_analysis(st.session_state.user_id, result, text, job_title_input or "Software Engineer")
+                                        if analysis_id:
+                                            st.success("✅ Results saved to database!")
+                                    
+                                    recommendations = recommend_jobs(skills_from_resume, limit=5)
+                                    
+                                    if recommendations:
+                                        st.success(f"✅ Found {len(recommendations)} job matches!")
+                                        
+                                        for i, job in enumerate(recommendations, 1):
+                                            with st.expander(f"{i}. {job['title']} at {job['company']} - {job['match_score']}% Match", expanded=(i==1)):
+                                                col1, col2 = st.columns(2)
+                                                with col1:
+                                                    st.markdown(f"**📍 Location:** {job['location']}")
+                                                    st.markdown(f"**💰 Salary:** {job['salary']}")
+                                                    st.markdown(f"**🎯 Match Score:** {job['match_score']}%")
+                                                with col2:
+                                                    st.markdown(f"**📊 Experience:** {job['experience_level']}")
+                                                    st.markdown(f"**✅ Matched Skills:** {', '.join(job['matched_skills'])}")
+                                                    if job['missing_skills']:
+                                                        st.warning(f"**❌ Missing Skills:** {', '.join(job['missing_skills'])}")
+                                                
+                                                st.markdown(f"**📝 Description:** {job['description']}")
+                                    else:
+                                        st.info("No job matches found for your skills.")
+                                else:
+                                    st.warning("No skills were extracted from your resume.")
+                    else:
+                        st.error("❌ Please upload a PDF file.")
+        else:
+            # User has no skills - show upload
+            st.info("📄 Upload your resume to discover job matches!")
+            
+            st.divider()
+            st.subheader("📄 Upload a Resume to Find Jobs")
+            
+            col1, col2 = st.columns([1, 2])
+            with col1:
+                uploaded_file = st.file_uploader("Choose a PDF file", type="pdf", key="job_upload_first")
+            with col2:
+                job_title_input = st.text_input("Job Title (Optional)", placeholder="e.g., Software Engineer")
+            
+            if st.button("🔍 Analyze Resume for Job Matches", use_container_width=True):
+                if uploaded_file:
+                    with st.spinner("Analyzing your resume..."):
+                        text, err = extract_text(uploaded_file)
+                        if err:
+                            st.error(f"❌ PDF error: {err}")
+                        else:
+                            st.success("✅ Resume analyzed successfully!")
+                            
+                            result = analyze_skills_advanced(text, job_title_input or "Software Engineer")
+                            skills_from_resume = result.get("skills_have", [])
+                            
+                            if skills_from_resume:
+                                st.info(f"📋 Skills Found: {', '.join(skills_from_resume)}")
+                                
+                                if st.session_state.user_id:
+                                    analysis_id = save_analysis(st.session_state.user_id, result, text, job_title_input or "Software Engineer")
+                                    if analysis_id:
+                                        st.success("✅ Results saved to database!")
+                                
+                                recommendations = recommend_jobs(skills_from_resume, limit=5)
+                                
+                                if recommendations:
+                                    st.success(f"✅ Found {len(recommendations)} job matches!")
+                                    
+                                    for i, job in enumerate(recommendations, 1):
+                                        with st.expander(f"{i}. {job['title']} at {job['company']} - {job['match_score']}% Match", expanded=(i==1)):
+                                            col1, col2 = st.columns(2)
+                                            with col1:
+                                                st.markdown(f"**📍 Location:** {job['location']}")
+                                                st.markdown(f"**💰 Salary:** {job['salary']}")
+                                                st.markdown(f"**🎯 Match Score:** {job['match_score']}%")
+                                            with col2:
+                                                st.markdown(f"**📊 Experience:** {job['experience_level']}")
+                                                st.markdown(f"**✅ Matched Skills:** {', '.join(job['matched_skills'])}")
+                                                if job['missing_skills']:
+                                                    st.warning(f"**❌ Missing Skills:** {', '.join(job['missing_skills'])}")
+                                            
+                                            st.markdown(f"**📝 Description:** {job['description']}")
+                                else:
+                                    st.info("No job matches found for your skills.")
+                            else:
+                                st.warning("No skills were extracted from your resume.")
+                else:
+                    st.error("❌ Please upload a PDF file.")
+    else:
+        st.warning("🔓 Please login to see job recommendations")
+
+# ============================================
+# SALARY ESTIMATOR - WITH UPLOAD
+# ============================================
+elif selected_nav == "💰 Salary Estimator":
+    st.title("💰 Salary Estimator")
+    st.subheader("Estimate your market value based on your skills")
+    
+    if st.session_state.user_id:
+        # Check if user has existing skills
+        history = get_user_analyses(st.session_state.user_id)
+        all_skills = []
+        
+        for h in history[:10]:
+            try:
+                if len(h) > 7 and h[7]:
+                    skills_have = json.loads(h[7])
+                    if isinstance(skills_have, list):
+                        all_skills.extend(skills_have)
+            except:
+                pass
+        
+        user_skills = list(set(all_skills))
+        
+        # Tab layout: Use existing skills or upload new
+        tab1, tab2 = st.tabs(["📋 Use My Skills", "📄 Upload Resume"])
+        
+        with tab1:
+            if user_skills:
+                st.info(f"🛠️ Your Skills: {', '.join(user_skills[:8])}")
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    location = st.selectbox(
+                        "📍 Location",
+                        ["United States", "United Kingdom", "Canada", "Germany", "Australia", "India", "Uganda", "Kenya", "Nigeria", "South Africa", "Remote"],
+                        key="salary_location_skills"
+                    )
+                
+                with col2:
+                    experience = st.selectbox(
+                        "📊 Experience Level",
+                        ["Entry", "Junior", "Mid-Level", "Senior", "Lead", "Principal", "Staff"],
+                        key="salary_exp_skills"
+                    )
+                
+                if st.button("💰 Estimate Salary", use_container_width=True, key="salary_estimate_skills"):
+                    with st.spinner("Calculating your market value..."):
+                        result = estimate_salary(user_skills, experience, location)
+                        
+                        st.balloons()
+                        
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("📊 Average Salary", f"${result['average']:,}")
+                        with col2:
+                            st.metric("📉 Minimum", f"${result['min']:,}")
+                        with col3:
+                            st.metric("📈 Maximum", f"${result['max']:,}")
+                        
+                        st.divider()
+                        
+                        st.subheader("💰 Salary Breakdown")
+                        
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.markdown(f"**Base Salary:** ${result['base']:,}")
+                            st.markdown(f"**Skills Bonus:** +${result['skill_bonus']:,}")
+                        with col2:
+                            st.markdown(f"**Experience Bonus:** +${result['experience_bonus']:,}")
+                            st.markdown(f"**Location Adjustment:** +${result['location_bonus']:,}")
+                        
+                        st.divider()
+                        st.subheader("📊 Market Comparison")
+                        
+                        percentile = result.get('percentile', 50)
+                        st.progress(percentile/100, text=f"You are in the top {100 - percentile}% of earners")
+                        
+                        st.caption(f"Market range for {location}: ${result['market_min']:,} - ${result['market_max']:,}")
+            else:
+                st.info("📄 No skills found. Upload a resume in the 'Upload Resume' tab.")
+        
+        with tab2:
+            st.subheader("📄 Upload a Resume for Salary Estimation")
+            
+            col1, col2 = st.columns([1, 2])
+            with col1:
+                uploaded_file = st.file_uploader("Choose a PDF file", type="pdf", key="salary_upload")
+            with col2:
+                job_title_input = st.text_input("Job Title (Optional)", placeholder="e.g., Software Engineer", key="salary_job_title")
+            
+            col3, col4 = st.columns(2)
+            with col3:
+                location = st.selectbox(
+                    "📍 Location",
+                    ["United States", "United Kingdom", "Canada", "Germany", "Australia", "India", "Uganda", "Kenya", "Nigeria", "South Africa", "Remote"],
+                    key="salary_location_upload"
+                )
+            
+            with col4:
+                experience = st.selectbox(
+                    "📊 Experience Level",
+                    ["Entry", "Junior", "Mid-Level", "Senior", "Lead", "Principal", "Staff"],
+                    key="salary_exp_upload"
+                )
+            
+            if st.button("💰 Estimate Salary from Resume", use_container_width=True, key="salary_estimate_upload"):
+                if uploaded_file:
+                    with st.spinner("Analyzing your resume and calculating salary..."):
+                        text, err = extract_text(uploaded_file)
+                        if err:
+                            st.error(f"❌ PDF error: {err}")
+                        else:
+                            st.success("✅ Resume analyzed successfully!")
+                            
+                            # Extract skills from resume
+                            result = analyze_skills_advanced(text, job_title_input or "Software Engineer")
+                            skills_from_resume = result.get("skills_have", [])
+                            
+                            if skills_from_resume:
+                                st.info(f"📋 Skills Found: {', '.join(skills_from_resume)}")
+                                
+                                # Save the analysis to database
+                                if st.session_state.user_id:
+                                    analysis_id = save_analysis(st.session_state.user_id, result, text, job_title_input or "Software Engineer")
+                                    if analysis_id:
+                                        st.success("✅ Results saved to database!")
+                                
+                                # Calculate salary
+                                salary_result = estimate_salary(skills_from_resume, experience, location)
+                                
+                                st.balloons()
+                                
+                                col1, col2, col3 = st.columns(3)
+                                with col1:
+                                    st.metric("📊 Average Salary", f"${salary_result['average']:,}")
+                                with col2:
+                                    st.metric("📉 Minimum", f"${salary_result['min']:,}")
+                                with col3:
+                                    st.metric("📈 Maximum", f"${salary_result['max']:,}")
+                                
+                                st.divider()
+                                
+                                st.subheader("💰 Salary Breakdown")
+                                
+                                col1, col2 = st.columns(2)
+                                with col1:
+                                    st.markdown(f"**Base Salary:** ${salary_result['base']:,}")
+                                    st.markdown(f"**Skills Bonus:** +${salary_result['skill_bonus']:,}")
+                                with col2:
+                                    st.markdown(f"**Experience Bonus:** +${salary_result['experience_bonus']:,}")
+                                    st.markdown(f"**Location Adjustment:** +${salary_result['location_bonus']:,}")
+                                
+                                st.divider()
+                                st.subheader("📊 Market Comparison")
+                                
+                                percentile = salary_result.get('percentile', 50)
+                                st.progress(percentile/100, text=f"You are in the top {100 - percentile}% of earners")
+                                
+                                st.caption(f"Market range for {location}: ${salary_result['market_min']:,} - ${salary_result['market_max']:,}")
+                            else:
+                                st.warning("No skills were extracted from your resume.")
+                else:
+                    st.error("❌ Please upload a PDF file.")
+    else:
+        st.warning("🔓 Please login to estimate your salary")
+
+# ============================================
+# INTERVIEW QUESTIONS
+# ============================================
+elif selected_nav == "🎤 Interview Questions":
+    st.title("🎤 Interview Questions Generator")
+    st.subheader("Prepare for your dream job with custom questions")
+    
+    if st.session_state.user_id:
+        history = get_user_analyses(st.session_state.user_id)
+        all_skills = []
+        
+        for h in history[:10]:
+            try:
+                if len(h) > 7 and h[7]:
+                    skills_have = json.loads(h[7])
+                    if isinstance(skills_have, list):
+                        all_skills.extend(skills_have)
+            except:
+                pass
+        
+        user_skills = list(set(all_skills))
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            job_title = st.selectbox(
+                "💼 Job Title",
+                ["Software Engineer", "Data Scientist", "DevOps Engineer", "Frontend Developer", "Backend Developer", "ML Engineer", "Product Manager", "QA Engineer", "Security Engineer"]
+            )
+        
+        with col2:
+            experience = st.selectbox(
+                "📊 Experience Level",
+                ["Entry", "Junior", "Mid-Level", "Senior", "Lead"]
+            )
+        
+        if user_skills:
+            st.info(f"🛠️ Your Skills: {', '.join(user_skills[:5])}")
+        
+        if st.button("🎤 Generate Questions", use_container_width=True):
+            with st.spinner("Generating custom interview questions..."):
+                questions = generate_questions(job_title, experience, user_skills, num_technical=5, num_behavioral=3)
+                
+                st.success("✅ Questions generated!")
+                st.balloons()
+                
+                # Technical Questions
+                st.subheader("🔹 Technical Questions")
+                for i, q in enumerate(questions["technical"], 1):
+                    with st.expander(f"Q{i}: {q['question']}"):
+                        st.info(f"💡 {q['answer']}")
+                
+                # Behavioral Questions
+                st.subheader("🔹 Behavioral Questions")
+                for i, q in enumerate(questions["behavioral"], 1):
+                    with st.expander(f"Q{i}: {q['question']}"):
+                        st.info(f"💡 {q['answer']}")
+                
+                # Skill-based Questions
+                if questions.get("skill_questions"):
+                    st.subheader("🔹 Skill-Based Questions")
+                    for i, q in enumerate(questions["skill_questions"], 1):
+                        with st.expander(f"Q{i}: {q['question']}"):
+                            st.info(f"💡 {q['answer']}")
+                
+                # Download button
+                all_questions_text = ""
+                for q in questions["technical"] + questions["behavioral"]:
+                    all_questions_text += f"Q: {q['question']}\nAnswer: {q['answer']}\n\n"
+                
+                st.download_button(
+                    label="📥 Download Questions",
+                    data=all_questions_text,
+                    file_name=f"interview_questions_{job_title.replace(' ', '_')}.txt",
+                    mime="text/plain",
+                    use_container_width=True
+                )
+    else:
+        st.warning("🔓 Please login to generate interview questions")
 
 # ============================================
 # FOOTER

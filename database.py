@@ -1,88 +1,60 @@
-# database.py - SQLite Version (Complete)
+# database.py - MySQL Version with Email Marketing
 
-import sqlite3
+import mysql.connector
 import json
 from datetime import datetime
 import uuid
 import hashlib
-import os
+import traceback
 
 # ============================================
-# DATABASE SETUP - SQLite
+# IMPORT EMAIL SERVICE
 # ============================================
 
-# Get the folder where this file is located
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, "skillbridge.db")
+from email_service import send_welcome_email
 
-print(f"📁 Database path: {DB_PATH}")
+# ============================================
+# DATABASE CONNECTION - MySQL
+# ============================================
+
+DB_HOST = "localhost"
+DB_USER = "root"
+DB_PASSWORD = ""
+DB_NAME = "skillbridge"
 
 def get_connection():
-    """Connect to SQLite database"""
+    """Connect to MySQL database"""
     try:
-        conn = sqlite3.connect(DB_PATH)
-        conn.row_factory = sqlite3.Row
+        conn = mysql.connector.connect(
+            host=DB_HOST,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            database=DB_NAME
+        )
         return conn
-    except Exception as e:
-        print(f"❌ Database error: {e}")
+    except mysql.connector.Error as e:
+        print(f"❌ MySQL Error: {e}")
         return None
 
-def create_tables():
-    """Create all tables if they don't exist"""
-    print("🔄 Creating tables...")
-    
-    conn = get_connection()
-    if conn is None:
-        print("❌ Could not connect to database")
-        return
-    
-    cursor = conn.cursor()
-    
-    # Users table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS Users (
-            Id TEXT PRIMARY KEY,
-            Email TEXT UNIQUE NOT NULL,
-            Name TEXT NOT NULL,
-            PasswordHash TEXT NOT NULL,
-            Role TEXT DEFAULT 'User',
-            CreatedAt TEXT NOT NULL,
-            IsActive INTEGER DEFAULT 1
-        )
-    ''')
-    print("✅ Users table created")
-    
-    # Analyses table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS Analyses (
-            Id TEXT PRIMARY KEY,
-            UserId TEXT NOT NULL,
-            ResumeText TEXT,
-            JobTitle TEXT,
-            JobDescription TEXT,
-            AtsScore INTEGER,
-            SkillsHave TEXT,
-            SkillsNeed TEXT,
-            CreatedAt TEXT NOT NULL,
-            FOREIGN KEY (UserId) REFERENCES Users(Id) ON DELETE CASCADE
-        )
-    ''')
-    print("✅ Analyses table created")
-    
-    conn.commit()
-    conn.close()
-    print("✅ Database created successfully!")
+# ============================================
+# PASSWORD HASHING
+# ============================================
 
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
 # ============================================
-# USER FUNCTIONS
+# USER FUNCTIONS - WITH EMAIL
 # ============================================
 
 def register_user(name, email, password):
-    """Register a new user"""
+    """
+    Register a new user - AUTOMATICALLY ADDS TO MYSQL DATABASE
+    AND SENDS WELCOME EMAIL
+    """
     try:
+        print(f"🔄 Registering user: {name} ({email})")
+        
         conn = get_connection()
         if conn is None:
             return None, "Database connection failed"
@@ -90,7 +62,7 @@ def register_user(name, email, password):
         cursor = conn.cursor()
         
         # Check if user exists
-        cursor.execute("SELECT Email FROM Users WHERE Email = ?", (email,))
+        cursor.execute("SELECT Email FROM Users WHERE Email = %s", (email,))
         if cursor.fetchone():
             conn.close()
             return None, "Email already registered"
@@ -101,15 +73,28 @@ def register_user(name, email, password):
         
         cursor.execute("""
             INSERT INTO Users (Id, Email, Name, PasswordHash, Role, CreatedAt, IsActive)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
         """, (user_id, email, name, hashed, 'User', now, 1))
         
         conn.commit()
         conn.close()
+        
         print(f"✅ User registered: {email}")
+        
+        # ============================================
+        # SEND WELCOME EMAIL
+        # ============================================
+        if user_id:
+            try:
+                send_welcome_email(name, email)
+                print(f"📧 Welcome email sent to {email}")
+            except Exception as e:
+                print(f"⚠️ Could not send welcome email: {e}")
+        
         return user_id, "Registration successful!"
         
-    except sqlite3.IntegrityError:
+    except mysql.connector.IntegrityError as e:
+        print(f"❌ Integrity Error: {e}")
         return None, "Email already registered"
     except Exception as e:
         print(f"❌ Registration error: {e}")
@@ -129,7 +114,7 @@ def login_user(email, password):
         
         cursor.execute("""
             SELECT Id, Name, Email FROM Users 
-            WHERE Email = ? AND PasswordHash = ? AND IsActive = 1
+            WHERE Email = %s AND PasswordHash = %s AND IsActive = 1
         """, (email, hashed))
         
         result = cursor.fetchone()
@@ -154,7 +139,7 @@ def is_admin(user_id):
             return False
         
         cursor = conn.cursor()
-        cursor.execute("SELECT Role FROM Users WHERE Id = ?", (user_id,))
+        cursor.execute("SELECT Role FROM Users WHERE Id = %s", (user_id,))
         result = cursor.fetchone()
         conn.close()
         
@@ -174,7 +159,7 @@ def get_user_by_id(user_id):
             return None
         
         cursor = conn.cursor()
-        cursor.execute("SELECT Id, Name, Email, Role FROM Users WHERE Id = ?", (user_id,))
+        cursor.execute("SELECT Id, Name, Email, Role FROM Users WHERE Id = %s", (user_id,))
         result = cursor.fetchone()
         conn.close()
         return result
@@ -194,9 +179,7 @@ def get_all_users():
         cursor.execute("SELECT Id, Name, Email, Role, CreatedAt, IsActive FROM Users ORDER BY CreatedAt DESC")
         results = cursor.fetchall()
         conn.close()
-        
-        # Convert to list of tuples
-        return [tuple(row) for row in results]
+        return results
         
     except Exception as e:
         print(f"❌ Error: {e}")
@@ -213,7 +196,7 @@ def get_all_users_admin():
         cursor.execute("SELECT Id, Name, Email, Role, CreatedAt, IsActive FROM Users ORDER BY CreatedAt DESC")
         results = cursor.fetchall()
         conn.close()
-        return [tuple(row) for row in results]
+        return results
         
     except Exception as e:
         print(f"❌ Error: {e}")
@@ -227,7 +210,7 @@ def update_user_role_admin(user_id, new_role):
             return False
         
         cursor = conn.cursor()
-        cursor.execute("UPDATE Users SET Role = ? WHERE Id = ?", (new_role, user_id))
+        cursor.execute("UPDATE Users SET Role = %s WHERE Id = %s", (new_role, user_id))
         conn.commit()
         conn.close()
         return True
@@ -244,7 +227,7 @@ def delete_user_admin(user_id):
             return False
         
         cursor = conn.cursor()
-        cursor.execute("DELETE FROM Users WHERE Id = ?", (user_id,))
+        cursor.execute("DELETE FROM Users WHERE Id = %s", (user_id,))
         conn.commit()
         conn.close()
         return True
@@ -254,47 +237,102 @@ def delete_user_admin(user_id):
         return False
 
 # ============================================
-# ANALYSIS FUNCTIONS
+# ANALYSIS FUNCTIONS - MYSQL VERSION
 # ============================================
 
 def save_analysis(user_id, result, resume_text, job_description):
-    """Save analysis results to database"""
+    """
+    Save complete analysis results to MySQL database
+    Including: Analyses, Missing_Skills, Roadmap_Steps, Resume_Tips
+    """
     try:
+        print(f"🔄 Saving complete analysis for user: {user_id}")
+        
         conn = get_connection()
         if conn is None:
+            print("❌ Database connection failed!")
             return None
         
         cursor = conn.cursor()
         
+        # Check if user exists
+        cursor.execute("SELECT Id FROM Users WHERE Id = %s", (user_id,))
+        if not cursor.fetchone():
+            print(f"❌ User {user_id} does not exist!")
+            conn.close()
+            return None
+        
+        # Generate IDs and timestamps
         analysis_id = str(uuid.uuid4())[:8]
         now = datetime.now().isoformat()
         
+        # Extract data from result
         job_title = result.get("job_title", "Software Engineer")
         ats_score = result.get("ats_score", 0)
         skills_have = json.dumps(result.get("skills_have", []))
         skills_need = json.dumps(result.get("skills_need", []))
         
+        # Step 1: Save to Analyses table
         cursor.execute("""
             INSERT INTO Analyses (
                 Id, UserId, ResumeText, JobTitle, JobDescription, AtsScore,
                 SkillsHave, SkillsNeed, CreatedAt
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             analysis_id, user_id, resume_text[:500], job_title, 
             job_description[:500], ats_score, skills_have, skills_need, now
         ))
+        print(f"✅ Analysis saved: {analysis_id}")
+        
+        # Step 2: Save Missing Skills
+        missing_skills = result.get("skills_missing", [])
+        for skill in missing_skills:
+            skill_id = str(uuid.uuid4())[:8]
+            cursor.execute("""
+                INSERT INTO Missing_Skills (Id, AnalysisId, SkillName, Importance, CreatedAt)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (skill_id, analysis_id, skill, "High", now))
+            print(f"  ✅ Missing skill saved: {skill}")
+        
+        # Step 3: Save Roadmap Steps
+        roadmap = result.get("learning_roadmap", [])
+        for i, step in enumerate(roadmap, 1):
+            step_id = str(uuid.uuid4())[:8]
+            cursor.execute("""
+                INSERT INTO Roadmap_Steps (Id, AnalysisId, StepOrder, ActionItem, CreatedAt)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (step_id, analysis_id, i, step[:500], now))
+            print(f"  ✅ Roadmap step saved: {step[:50]}...")
+        
+        # Step 4: Save Resume Tips
+        tips = result.get("resume_tips", [])
+        for i, tip in enumerate(tips, 1):
+            tip_id = str(uuid.uuid4())[:8]
+            cursor.execute("""
+                INSERT INTO Resume_Tips (Id, AnalysisId, TipOrder, TipText, Category, CreatedAt)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (tip_id, analysis_id, i, tip[:500], "General", now))
+            print(f"  ✅ Resume tip saved: {tip[:50]}...")
         
         conn.commit()
         conn.close()
-        print(f"✅ Analysis saved: {analysis_id}")
+        
+        print(f"✅ Complete analysis saved to MySQL: {analysis_id}")
         return analysis_id
         
+    except mysql.connector.Error as e:
+        print(f"❌ MySQL Error: {e}")
+        print(f"Error details: {traceback.format_exc()}")
+        return None
     except Exception as e:
         print(f"❌ Error: {e}")
+        print(f"Error details: {traceback.format_exc()}")
         return None
 
 def get_user_analyses(user_id):
-    """Get all analyses for a user"""
+    """
+    Get all analyses for a user from MySQL
+    """
     try:
         conn = get_connection()
         if conn is None:
@@ -303,20 +341,64 @@ def get_user_analyses(user_id):
         cursor = conn.cursor()
         cursor.execute("""
             SELECT * FROM Analyses 
-            WHERE UserId = ? 
+            WHERE UserId = %s 
             ORDER BY CreatedAt DESC
         """, (user_id,))
         
         results = cursor.fetchall()
         conn.close()
-        return [tuple(row) for row in results]
+        return results
         
-    except Exception as e:
-        print(f"❌ Error: {e}")
+    except mysql.connector.Error as e:
+        print(f"❌ MySQL Error: {e}")
         return []
 
+def get_analysis_details(analysis_id):
+    """
+    Get complete analysis details including missing skills, roadmap, tips
+    """
+    try:
+        conn = get_connection()
+        if conn is None:
+            return None
+        
+        cursor = conn.cursor()
+        
+        # Get main analysis
+        cursor.execute("SELECT * FROM Analyses WHERE Id = %s", (analysis_id,))
+        analysis = cursor.fetchone()
+        
+        if not analysis:
+            conn.close()
+            return None
+        
+        # Get missing skills
+        cursor.execute("SELECT * FROM Missing_Skills WHERE AnalysisId = %s", (analysis_id,))
+        missing_skills = cursor.fetchall()
+        
+        # Get roadmap steps
+        cursor.execute("SELECT * FROM Roadmap_Steps WHERE AnalysisId = %s ORDER BY StepOrder", (analysis_id,))
+        roadmap_steps = cursor.fetchall()
+        
+        # Get resume tips
+        cursor.execute("SELECT * FROM Resume_Tips WHERE AnalysisId = %s ORDER BY TipOrder", (analysis_id,))
+        resume_tips = cursor.fetchall()
+        
+        conn.close()
+        
+        return {
+            "analysis": analysis,
+            "missing_skills": missing_skills,
+            "roadmap_steps": roadmap_steps,
+            "resume_tips": resume_tips
+        }
+        
+    except mysql.connector.Error as e:
+        print(f"❌ MySQL Error: {e}")
+        return None
+
 # ============================================
-# STATISTICS FUNCTIONS
+# STATISTICS FUNCTIONS - MYSQL VERSION
 # ============================================
 
 def get_user_statistics(user_id):
@@ -333,14 +415,14 @@ def get_user_statistics(user_id):
         
         cursor = conn.cursor()
         
-        cursor.execute("SELECT COUNT(*) FROM Analyses WHERE UserId = ?", (user_id,))
+        cursor.execute("SELECT COUNT(*) FROM Analyses WHERE UserId = %s", (user_id,))
         total = cursor.fetchone()[0]
         
-        cursor.execute("SELECT AVG(AtsScore) FROM Analyses WHERE UserId = ?", (user_id,))
+        cursor.execute("SELECT AVG(AtsScore) FROM Analyses WHERE UserId = %s", (user_id,))
         avg_result = cursor.fetchone()[0]
         avg_score = round(avg_result, 0) if avg_result else 0
         
-        cursor.execute("SELECT COUNT(DISTINCT JobTitle) FROM Analyses WHERE UserId = ?", (user_id,))
+        cursor.execute("SELECT COUNT(DISTINCT JobTitle) FROM Analyses WHERE UserId = %s", (user_id,))
         jobs_matched = cursor.fetchone()[0]
         
         if total == 0:
@@ -417,37 +499,31 @@ def get_system_stats_admin():
 
 def setup_database():
     """Complete database setup"""
-    print("🔄 Setting up SkillBridge SQLite database...")
-    print(f"📁 Database path: {DB_PATH}")
-    create_tables()
+    print("🔄 Setting up SkillBridge MySQL database...")
+    print("📁 Database: skillbridge on MySQL")
+    
+    conn = get_connection()
+    if conn is None:
+        print("❌ Could not connect to MySQL. Make sure XAMPP is running.")
+        return
+    
+    cursor = conn.cursor()
     
     # Check if admin user exists
-    conn = get_connection()
-    if conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM Users WHERE Role = 'Admin'")
-        count = cursor.fetchone()[0]
-        conn.close()
-        
-        if count == 0:
-            print("👤 Creating default admin user...")
-            admin_id, msg = register_user("Admin User", "admin@skillbridge.com", "admin123")
-            if admin_id:
-                conn = get_connection()
-                cursor = conn.cursor()
-                cursor.execute("UPDATE Users SET Role = 'Admin' WHERE Id = ?", (admin_id,))
-                conn.commit()
-                conn.close()
-                print("✅ Default admin created: admin@skillbridge.com / admin123")
+    cursor.execute("SELECT COUNT(*) FROM Users WHERE Role = 'Admin'")
+    count = cursor.fetchone()[0]
+    conn.close()
     
-    # Show all users
-    users = get_all_users()
-    if users:
-        print("\n📋 Users in database:")
-        for user in users:
-            print(f"  👤 {user[1]} ({user[2]}) - Role: {user[3]}")
-    else:
-        print("\n📋 No users in database yet.")
+    if count == 0:
+        print("👤 Creating default admin user...")
+        admin_id, msg = register_user("Admin User", "admin@skillbridge.com", "admin123")
+        if admin_id:
+            conn = get_connection()
+            cursor = conn.cursor()
+            cursor.execute("UPDATE Users SET Role = 'Admin' WHERE Id = %s", (admin_id,))
+            conn.commit()
+            conn.close()
+            print("✅ Default admin created: admin@skillbridge.com / admin123")
     
     print("✅ Database setup complete!")
 
