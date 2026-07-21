@@ -1,36 +1,54 @@
-# database.py - MySQL Version with Email Marketing
+# database.py - MySQL Version with Streamlit Secrets Support
 
+import streamlit as st
 import mysql.connector
 import json
 from datetime import datetime
 import uuid
 import hashlib
 import traceback
+import os
 
 # ============================================
 # IMPORT EMAIL SERVICE
 # ============================================
 
-from email_service import send_welcome_email
+try:
+    from email_service import send_welcome_email
+except:
+    pass
 
 # ============================================
 # DATABASE CONNECTION - MySQL
 # ============================================
 
-DB_HOST = "localhost"
-DB_USER = "root"
-DB_PASSWORD = ""
-DB_NAME = "skillbridge"
-
 def get_connection():
-    """Connect to MySQL database"""
+    """
+    Connect to MySQL database.
+    Uses Streamlit Secrets on Cloud, localhost for development.
+    """
     try:
-        conn = mysql.connector.connect(
-            host=DB_HOST,
-            user=DB_USER,
-            password=DB_PASSWORD,
-            database=DB_NAME
-        )
+        # Check if running on Streamlit Cloud (has secrets)
+        if hasattr(st, 'secrets') and 'mysql' in st.secrets:
+            # Cloud mode - use Streamlit Secrets
+            conn = mysql.connector.connect(
+                host=st.secrets["mysql"]["host"],
+                user=st.secrets["mysql"]["user"],
+                password=st.secrets["mysql"]["password"],
+                database=st.secrets["mysql"]["database"],
+                port=st.secrets["mysql"]["port"]
+            )
+            print("✅ Connected to MySQL (Cloud)")
+        else:
+            # Local development (XAMPP)
+            conn = mysql.connector.connect(
+                host="localhost",
+                user="root",
+                password="",
+                database="skillbridge",
+                port=3306
+            )
+            print("✅ Connected to MySQL (Local)")
         return conn
     except mysql.connector.Error as e:
         print(f"❌ MySQL Error: {e}")
@@ -81,15 +99,12 @@ def register_user(name, email, password):
         
         print(f"✅ User registered: {email}")
         
-        # ============================================
-        # SEND WELCOME EMAIL
-        # ============================================
-        if user_id:
-            try:
-                send_welcome_email(name, email)
-                print(f"📧 Welcome email sent to {email}")
-            except Exception as e:
-                print(f"⚠️ Could not send welcome email: {e}")
+        # Send welcome email
+        try:
+            send_welcome_email(name, email)
+            print(f"📧 Welcome email sent to {email}")
+        except:
+            print("⚠️ Could not send welcome email")
         
         return user_id, "Registration successful!"
         
@@ -500,11 +515,10 @@ def get_system_stats_admin():
 def setup_database():
     """Complete database setup"""
     print("🔄 Setting up SkillBridge MySQL database...")
-    print("📁 Database: skillbridge on MySQL")
     
     conn = get_connection()
     if conn is None:
-        print("❌ Could not connect to MySQL. Make sure XAMPP is running.")
+        print("❌ Could not connect to MySQL.")
         return
     
     cursor = conn.cursor()
