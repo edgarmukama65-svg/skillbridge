@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # database.py - MySQL Version with Email Marketing
-=======
-# database.py - SQLite Version for Streamlit Cloud
->>>>>>> f75f9c686ce757bd6b3dc7c47572dae75af9ff87
 
 import mysql.connector
 import json
@@ -15,12 +11,7 @@ import traceback
 # IMPORT EMAIL SERVICE
 # ============================================
 
-<<<<<<< HEAD
 from email_service import send_welcome_email
-=======
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, "skillbridge.db")
->>>>>>> f75f9c686ce757bd6b3dc7c47572dae75af9ff87
 
 # ============================================
 # DATABASE CONNECTION - MySQL
@@ -44,105 +35,6 @@ def get_connection():
     except mysql.connector.Error as e:
         print(f"❌ MySQL Error: {e}")
         return None
-
-# ============================================
-<<<<<<< HEAD
-# PASSWORD HASHING
-# ============================================
-=======
-# CREATE TABLES
-# ============================================
-
-def create_tables():
-    """Create all tables if they don't exist"""
-    print("🔄 Creating tables...")
-    
-    conn = get_connection()
-    if conn is None:
-        print("❌ Could not connect to database")
-        return
-    
-    cursor = conn.cursor()
-    
-    # Users table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS Users (
-            Id TEXT PRIMARY KEY,
-            Email TEXT UNIQUE NOT NULL,
-            Name TEXT NOT NULL,
-            PasswordHash TEXT NOT NULL,
-            Role TEXT DEFAULT 'User',
-            CreatedAt TEXT NOT NULL,
-            IsActive INTEGER DEFAULT 1
-        )
-    ''')
-    print("✅ Users table created")
-    
-    # Analyses table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS Analyses (
-            Id TEXT PRIMARY KEY,
-            UserId TEXT NOT NULL,
-            ResumeText TEXT,
-            JobTitle TEXT,
-            JobDescription TEXT,
-            AtsScore INTEGER,
-            SkillsHave TEXT,
-            SkillsNeed TEXT,
-            CreatedAt TEXT NOT NULL,
-            FOREIGN KEY (UserId) REFERENCES Users(Id) ON DELETE CASCADE
-        )
-    ''')
-    print("✅ Analyses table created")
-    
-    conn.commit()
-    conn.close()
-    print("✅ Database created successfully!")
->>>>>>> f75f9c686ce757bd6b3dc7c47572dae75af9ff87
-
-# ============================================
-# CREATE DEFAULT ADMIN USER
-# ============================================
-
-def create_admin_user():
-    """Create default admin user if not exists"""
-    conn = get_connection()
-    if conn is None:
-        return
-    
-    cursor = conn.cursor()
-    
-    # Check if admin exists
-    cursor.execute("SELECT COUNT(*) FROM Users WHERE Role = 'Admin'")
-    count = cursor.fetchone()[0]
-    
-    if count == 0:
-        print("👤 Creating default admin user...")
-        user_id = str(uuid.uuid4())[:8]
-        now = datetime.now().isoformat()
-        password_hash = hashlib.sha256("admin123".encode()).hexdigest()
-        
-        cursor.execute("""
-            INSERT INTO Users (Id, Email, Name, PasswordHash, Role, CreatedAt, IsActive)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (user_id, "admin@skillbridge.com", "Admin User", password_hash, "Admin", now, 1))
-        
-        conn.commit()
-        print("✅ Default admin created: admin@skillbridge.com / admin123")
-    else:
-        print("👤 Admin user already exists")
-    
-    conn.close()
-
-# ============================================
-# RUN SETUP ON STARTUP
-# ============================================
-
-# Create tables when app starts
-create_tables()
-
-# Create admin user when app starts
-create_admin_user()
 
 # ============================================
 # PASSWORD HASHING
@@ -169,12 +61,8 @@ def register_user(name, email, password):
         
         cursor = conn.cursor()
         
-<<<<<<< HEAD
         # Check if user exists
         cursor.execute("SELECT Email FROM Users WHERE Email = %s", (email,))
-=======
-        cursor.execute("SELECT Email FROM Users WHERE Email = ?", (email,))
->>>>>>> f75f9c686ce757bd6b3dc7c47572dae75af9ff87
         if cursor.fetchone():
             conn.close()
             return None, "Email already registered"
@@ -291,11 +179,7 @@ def get_all_users():
         cursor.execute("SELECT Id, Name, Email, Role, CreatedAt, IsActive FROM Users ORDER BY CreatedAt DESC")
         results = cursor.fetchall()
         conn.close()
-<<<<<<< HEAD
         return results
-=======
-        return [tuple(row) for row in results]
->>>>>>> f75f9c686ce757bd6b3dc7c47572dae75af9ff87
         
     except Exception as e:
         print(f"❌ Error: {e}")
