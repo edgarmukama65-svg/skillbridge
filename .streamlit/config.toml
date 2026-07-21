@@ -1,0 +1,8 @@
+# .streamlit/config.toml
+
+[server]
+# Set max file upload size to 2MB
+maxUploadSize = 2
+
+# Or in bytes (2 * 1024 * 1024 = 2097152)
+# maxUploadSize = 2097152
