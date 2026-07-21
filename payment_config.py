@@ -4,10 +4,10 @@
 # STRIPE SETTINGS (TEST MODE)
 # ============================================
 
-# Your Stripe Test Keys from the dashboard
-STRIPE_PUBLISHABLE_KEY = "pk_test_51Ttq5TCMxcX1Mn3B5yphIT6B00nFcetD5YsFL3rUw5Ikmo1H8IN7DrzB07hj3QuvIGD0gKMpIZwFoSeo5qXy1QNP0@poNc0Sgx"
-
-STRIPE_SECRET_KEY = "sk_test_51Ttq5TCMxcX1Mn3BjnnowyIAnTKE1G995F1DjEpUMDQist81kDF5tBaQGQ1dELi5WevLvvi9y0JZBCZTnPMPm0@qmLAcPXf"
+# Get your test keys from: https://dashboard.stripe.com/test/apikeys
+# For production, use environment variables
+STRIPE_PUBLISHABLE_KEY = "pk_test_..."  # ← Replace with your publishable key
+STRIPE_SECRET_KEY = "sk_test_..."      # ← Replace with your secret key
 
 # ============================================
 # PRICING PLANS
@@ -46,3 +46,11 @@ PLANS = {
         ]
     }
 }
+
+# ============================================
+# HOW TO GET STRIPE KEYS
+# ============================================
+# 1. Go to: https://dashboard.stripe.com/test/apikeys
+# 2. Copy your Publishable key (starts with pk_test_)
+# 3. Copy your Secret key (starts with sk_test_)
+# 4. Paste them above
